@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Rocket 2D Final+++</title>
+<style>
+body { margin:0; overflow:hidden; background:#111; font-family:Arial;}
+
+#menu, #controlsMenu {
+ position:absolute;
+ width:100%;
+ height:100%;
+ background:black;
+ color:white;
+ display:flex;
+ flex-direction:column;
+ align-items:center;
+ justify-content:center;
+}
+
+#menu h3 {
+ position:absolute;
+ top:20px;
+ font-weight:normal;
+}
+
+#controlsMenu { display:none; }
+
+#popup {
+ position:absolute;
+ width:100%;
+ text-align:center;
+ top:35%;
+ font-size:60px;
+ color:white;
+ display:none;
+}
+
+button {
+ padding:15px 40px;
+ margin:10px;
+ font-size:20px;
+ cursor:pointer;
+}
+canvas { display:block; }
+</style>
+</head>
+<body>
+
+<div id="menu">
+<h3>made by smartest guy btw</h3>
+<h1>ROCKET 2D</h1>
+<button onclick="startGame()">PLAY</button>
+<button onclick="openControls()">CONTROLS</button>
+</div>
+
+<div id="controlsMenu">
+<h2>CONTROLS</h2>
+<p>A / D = Move</p>
+<p>W = Jump / Flip</p>
+<p>Arrow Keys = Rotate (Air)</p>
+<p>SPACE = Boost</p>
+<button onclick="closeControls()">BACK</button>
+</div>
+
+<div id="popup"></div>
+<canvas id="c"></canvas>
+
+<script>
+const canvas = document.getElementById("c");
+const ctx = canvas.getContext("2d");
+canvas.width = window.innerWidth;
+canvas.height = window.innerHeight;
+
+let gravity = 0.4;
+let countdown = 3;
+let counting = true;
+let gameTime = 90;
+
+let blueScore = 0;
+let orangeScore = 0;
+
+// INPUT
+let keys = {};
+let prevKeys = {};
+document.onkeydown = e => keys[e.key.toLowerCase()] = true;
+document.onkeyup = e => keys[e.key.toLowerCase()] = false;
+function keyPressed(k){ return keys[k] && !prevKeys[k]; }
+
+// MENUS
+function openControls(){
+ document.getElementById("menu").style.display="none";
+ document.getElementById("controlsMenu").style.display="flex";
+}
+function closeControls(){
+ document.getElementById("controlsMenu").style.display="none";
+ document.getElementById("menu").style.display="flex";
+}
+function startGame(){
+ document.getElementById("menu").style.display="none";
+ resetGame();
+}
+
+// PLAYER
+let player = {x:200,y:300,vx:0,vy:0,w:70,h:30,angle:0,angularVel:0,onGround:false,canDouble:true,boost:100};
+
+// BOT
+let bot = {x:canvas.width-250,y:300,vx:0,vy:0,w:70,h:30,boost:100};
+
+// BALL
+let ball = {x:canvas.width/2,y:200,vx:0,vy:0,r:18};
+
+// EXPLOSIONS
+let explosions = [];
+let goalSound = new Audio("https://actions.google.com/sounds/v1/explosions/explosion.ogg");
+
+function explode(x,y){
+ for(let i=0;i<30;i++){
+   explosions.push({
+     x,y,
+     vx:(Math.random()-0.5)*12,
+     vy:(Math.random()-0.5)*12,
+     life:30
+   });
+ }
+}
+
+// RESET
+function resetGame(){
+ ball.x = canvas.width/2;
+ ball.y = 200;
+ ball.vx = 0;
+ ball.vy = 0;
+
+ player.x = 200;
+ player.y = 300;
+ player.vx = 0;
+ player.vy = 0;
+ player.angle = 0;
+ player.boost = 100;
+ player.canDouble = true;
+
+ bot.x = canvas.width-250;
+ bot.y = 300;
+ bot.vx = 0;
+ bot.vy = 0;
+ bot.boost = 100;
+
+ countdown = 3;
+ counting = true;
+
+ let int = setInterval(()=>{
+   countdown--;
+   if(countdown <= 0){
+     counting = false;
+     clearInterval(int);
+   }
+ },1000);
+}
+
+// POPUP
+function show(text){
+ let p=document.getElementById("popup");
+ p.innerText=text;
+ p.style.display="block";
+ setTimeout(()=>p.style.display="none",2000);
+}
+
+// TIMER
+setInterval(()=>{
+ if(!counting && gameTime > 0){
+   gameTime--;
+ }
+ if(gameTime === 0){
+   endGame();
+ }
+},1000);
+
+function endGame(){
+ let result = "DRAW";
+ if(blueScore > orangeScore) result = "BLUE WINS!";
+ if(orangeScore > blueScore) result = "ORANGE WINS!";
+
+ show(result);
+
+ setTimeout(()=>{
+   document.getElementById("menu").style.display="flex";
+   gameTime = 90;
+   blueScore = 0;
+   orangeScore = 0;
+ },3000);
+}
+
+// UPDATE
+function update(){
+
+ if(counting) return;
+
+ // MOVE
+ if(keys["a"]) player.vx -= 0.4;
+ if(keys["d"]) player.vx += 0.4;
+
+ // ROTATE
+ if(!player.onGround){
+   if(keys["arrowleft"]) player.angularVel -= 1;
+   if(keys["arrowright"]) player.angularVel += 1;
+ }
+
+ player.angle += player.angularVel;
+ player.angularVel *= 0.95;
+
+ // JUMP SYSTEM
+ if(keyPressed("w") && player.onGround){
+   player.vy = -11;
+   player.onGround = false;
+ }
+ else if(keyPressed("w") && !player.onGround && player.canDouble){
+   player.angularVel = 30;
+   player.vy = -8;
+   if(keys["a"]) player.vx -= 5;
+   if(keys["d"]) player.vx += 5;
+   player.canDouble = false;
+ }
+
+ // BOOST
+ if(keys[" "] && player.boost > 0){
+   let rad = player.angle * Math.PI/180;
+   player.vx += Math.cos(rad)*0.7;
+   player.vy += Math.sin(rad)*0.7;
+   player.boost--;
+ }
+
+ // PHYSICS
+ player.vy += gravity;
+ player.x += player.vx;
+ player.y += player.vy;
+
+ // STADIUM WALLS
+ if(player.x < 0){player.x=0;player.vx*=-0.5;}
+ if(player.x+player.w > canvas.width){player.x=canvas.width-player.w;player.vx*=-0.5;}
+ if(player.y < 0){player.y=0;player.vy*=-0.5;}
+
+ // GROUND
+ if(player.y + player.h > canvas.height){
+   player.y = canvas.height - player.h;
+   player.vy = 0;
+   player.angle = 0;
+   player.onGround = true;
+   player.canDouble = true;
+   player.boost = 100;
+ }
+
+ player.vx *= 0.98;
+
+ // BOT
+ if(ball.x > bot.x) bot.vx += 0.3;
+ if(ball.x < bot.x) bot.vx -= 0.3;
+
+ if(bot.boost > 0 && Math.random()<0.05){
+   bot.vy -= 0.6;
+   bot.boost--;
+ }
+
+ bot.vy += gravity;
+ bot.x += bot.vx;
+ bot.y += bot.vy;
+
+ if(bot.y+bot.h > canvas.height){
+   bot.y = canvas.height-bot.h;
+   bot.vy=0;
+ }
+
+ // BALL
+ ball.vy += gravity;
+ ball.x += ball.vx;
+ ball.y += ball.vy;
+
+ if(ball.x-ball.r<0){ball.x=ball.r;ball.vx*=-0.9;}
+ if(ball.x+ball.r>canvas.width){ball.x=canvas.width-ball.r;ball.vx*=-0.9;}
+ if(ball.y-ball.r<0){ball.y=ball.r;ball.vy*=-0.9;}
+ if(ball.y+ball.r>canvas.height){ball.y=canvas.height-ball.r;ball.vy*=-0.9;}
+
+ // COLLISION
+ function collide(p){
+   let dx = ball.x-(p.x+p.w/2);
+   let dy = ball.y-(p.y+p.h/2);
+   let dist = Math.sqrt(dx*dx+dy*dy);
+   if(dist < ball.r+30){
+     let nx=dx/dist, ny=dy/dist;
+     let rel=(ball.vx-p.vx)*nx+(ball.vy-p.vy)*ny;
+     if(rel<0){
+       let imp=-1.5*rel;
+       ball.vx+=nx*imp;
+       ball.vy+=ny*imp;
+     }
+   }
+ }
+ collide(player);
+ collide(bot);
+
+ // GOALS (VISIBLE BOX)
+ let goalHeight = 150;
+
+ if(ball.x < 40 && ball.y > canvas.height-goalHeight){
+   orangeScore++;
+   explode(ball.x,ball.y);
+   goalSound.play();
+   show("ORANGE SCORED!");
+   resetGame();
+ }
+
+ if(ball.x > canvas.width-40 && ball.y > canvas.height-goalHeight){
+   blueScore++;
+   explode(ball.x,ball.y);
+   goalSound.play();
+   show("BLUE SCORED!");
+   resetGame();
+ }
+
+ explosions.forEach(e=>{
+   e.x+=e.vx;
+   e.y+=e.vy;
+   e.life--;
+ });
+ explosions = explosions.filter(e=>e.life>0);
+
+ prevKeys = {...keys};
+}
+
+// DRAW
+function draw(){
+ ctx.clearRect(0,0,canvas.width,canvas.height);
+
+ ctx.fillStyle="blue";
+ ctx.fillRect(0,0,canvas.width/2,canvas.height);
+ ctx.fillStyle="orange";
+ ctx.fillRect(canvas.width/2,0,canvas.width/2,canvas.height);
+
+ // GOALS (VISIBLE)
+ ctx.fillStyle="black";
+ ctx.fillRect(0,canvas.height-150,40,150);
+ ctx.fillRect(canvas.width-40,canvas.height-150,40,150);
+
+ ctx.strokeStyle="white";
+ ctx.lineWidth=3;
+ ctx.strokeRect(0,canvas.height-150,40,150);
+ ctx.strokeRect(canvas.width-40,canvas.height-150,40,150);
+
+ drawCar(player,"cyan");
+ drawCar(bot,"red");
+
+ ctx.beginPath();
+ ctx.arc(ball.x,ball.y,ball.r,0,Math.PI*2);
+ ctx.fillStyle="white";
+ ctx.fill();
+
+ explosions.forEach(e=>{
+   ctx.fillStyle="yellow";
+   ctx.fillRect(e.x,e.y,4,4);
+ });
+
+ ctx.fillStyle="white";
+ ctx.font="30px Arial";
+ ctx.fillText(blueScore+" - "+orangeScore,canvas.width/2-40,40);
+ ctx.fillText(gameTime,canvas.width/2-15,80);
+
+ if(counting){
+   ctx.font="80px Arial";
+   ctx.fillText(countdown,canvas.width/2-20,canvas.height/2);
+ }
+}
+
+function drawCar(p,color){
+ ctx.save();
+ ctx.translate(p.x+p.w/2,p.y+p.h/2);
+ ctx.rotate(p.angle*Math.PI/180);
+
+ ctx.fillStyle=color;
+ ctx.fillRect(-35,-15,70,25);
+ ctx.fillRect(-20,-25,40,15);
+
+ ctx.fillStyle="black";
+ ctx.beginPath(); ctx.arc(-20,15,7,0,Math.PI*2); ctx.fill();
+ ctx.beginPath(); ctx.arc(20,15,7,0,Math.PI*2); ctx.fill();
+
+ if(keys[" "]){
+   ctx.fillStyle="yellow";
+   ctx.fillRect(-45,0,15,5);
+ }
+
+ ctx.restore();
+}
+
+function loop(){
+ update();
+ draw();
+ requestAnimationFrame(loop);
+}
+
+loop();
+</script>
+
+</body>
+</html>
